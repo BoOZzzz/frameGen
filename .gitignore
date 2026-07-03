@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+dist/
+build/
+*.egg-info/
+tmp/
+outputs/
+output/
+tests/
+vendor/
+.framegen.json
+.agents/
