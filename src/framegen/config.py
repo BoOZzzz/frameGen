@@ -16,6 +16,9 @@ class AppConfig:
     rife_python_exe: str | None = None
     rife_dir: str | None = None
     rife_model_dir: str | None = None
+    video_codec: str | None = None
+    video_crf: str | None = None
+    video_preset: str | None = None
 
     def to_dict(self) -> dict[str, str | None]:
         return asdict(self)

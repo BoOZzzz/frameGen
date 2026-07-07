@@ -7,7 +7,7 @@ This repository is intentionally starting as an orchestration layer instead of a
 - Probe source video with `ffprobe`
 - Build a job plan for 24/30fps to 60fps conversion
 - Call a pluggable interpolation backend such as RIFE or FILM
-- Remux original audio back onto the interpolated output
+- Re-encode the interpolated result with a storage-efficient final codec and remux original audio back onto it
 
 ## Why this architecture
 
@@ -51,13 +51,58 @@ framegen configure `
 Inspect a source file and print the plan:
 
 ```powershell
-framegen plan --input movie.mp4 --output movie_60fps.mp4 --backend rife-cli
+framegen plan -i movie.mp4 -o movie_60fps.mp4
 ```
 
 Run an interpolation job:
 
 ```powershell
-framegen run --input movie.mp4 --output movie_60fps.mp4 --backend rife-cli
+framegen run -i movie.mp4 -o movie_60fps.mp4
+```
+
+`framegen run` now defaults to resumable chunked processing. FrameGen keeps intermediate state under the work directory and will skip already-finished chunks if you rerun the same command after an interruption.
+
+Run explicitly in resumable mode:
+
+```powershell
+framegen run -i movie.mp4 -o movie_60fps.mp4 --resume
+```
+
+You can tune the amount of redo after a stop with a smaller chunk size:
+
+```powershell
+framegen run -i movie.mp4 -o movie_60fps.mp4 --resume --chunk-duration 30
+```
+
+If you explicitly want the old single-pass behavior with no resumable chunk state, use:
+
+```powershell
+framegen run -i movie.mp4 -o movie_60fps.mp4 --no-resume
+```
+
+The CLI is currently wired to the `rife-cli` backend internally.
+
+By default, FrameGen now does a final H.264 encode tuned for smaller files with very high visual quality:
+
+- codec: `libx264`
+- CRF: `18`
+- preset: `slow`
+
+Override those defaults when you need a different storage/performance tradeoff:
+
+```powershell
+framegen run `
+  -i movie.mp4 `
+  -o movie_60fps.mp4 `
+  --video-codec libx265 `
+  --video-crf 20 `
+  --video-preset slow
+```
+
+If you explicitly want to skip the final optimization pass and keep the backend's raw output stream, use:
+
+```powershell
+framegen run -i movie.mp4 -o movie_60fps.mp4 --video-codec copy
 ```
 
 Check whether the local RIFE checkout and model weights are ready:
@@ -74,11 +119,7 @@ framegen setup-rife
 
 This shell still does not inherit your normal PATH, so explicit paths in `framegen configure` are the most dependable way to make the tool runnable here.
 
-Fallback without a neural model:
-
-```powershell
-framegen run --input movie.mp4 --output movie_60fps.mp4 --backend ffmpeg-minterpolate
-```
+The repository still contains internal backend contracts for `rife-double`, `film-cli`, and `ffmpeg-minterpolate`, but they are not currently exposed as CLI switches.
 
 ## RIFE setup
 
@@ -93,9 +134,8 @@ You can also point to another checkout or model directory:
 
 ```powershell
 framegen run `
-  --input movie.mp4 `
-  --output movie_60fps.mp4 `
-  --backend rife-cli `
+  -i movie.mp4 `
+  -o movie_60fps.mp4 `
   --config .framegen.json `
   --rife-dir C:\models\ECCV2022-RIFE `
   --rife-model-dir C:\models\ECCV2022-RIFE\train_log `
